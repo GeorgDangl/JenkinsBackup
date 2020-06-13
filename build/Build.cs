@@ -120,6 +120,9 @@ class Build : NukeBuild
         .Requires(() => BlobStorageConnectionString)
         .Executes(async () =>
         {
+            Logger.Normal("Jenkins.Instance.JobBaseName:" + Jenkins.Instance.JobBaseName);
+            Logger.Normal("Jenkins.Instance.JobName:" + Jenkins.Instance.JobName);
+
             Logger.Normal("Starting backup of Jenkins. This will not backup the master key, please ensure it's backed up separately.");
             EnsureExistingDirectory(JenkinsHome);
 
