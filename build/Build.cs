@@ -12,6 +12,7 @@ using Nuke.Common.Execution;
 using Nuke.Common.IO;
 using static Nuke.Common.IO.FileSystemTasks;
 using System.IO.Compression;
+using static Nuke.Common.IO.PathConstruction;
 
 [UnsetVisualStudioEnvironmentVariables]
 class Build : NukeBuild
@@ -129,14 +130,7 @@ class Build : NukeBuild
                 "jenkins.xml"
             };
 
-            var outputJobsZipFile = OutputDirectory / "jobs.zip";
-            var jenkinsJobsDirectory = Path.Combine(JenkinsHome, "jobs");
-            ZipFile.CreateFromDirectory(jenkinsJobsDirectory, outputJobsZipFile);
-            var outputUsersZipFile = OutputDirectory / "users.zip";
-            var jenkinsUsersDirectory = Path.Combine(JenkinsHome, "users");
-            ZipFile.CreateFromDirectory(jenkinsUsersDirectory, outputUsersZipFile);
-
-            Func<ZipArchiveEntry, string, Task> addFileToEntry = async (entry, absolutePath) =>
+            Func<ZipArchiveEntry, string, Task> addFileToZipArchive = async (entry, absolutePath) =>
             {
                 using (var entryStream = entry.Open())
                 {
@@ -153,17 +147,44 @@ class Build : NukeBuild
             {
                 using (var zipFile = new ZipArchive(fs, ZipArchiveMode.Create))
                 {
+                    Logger.Normal("Zipping config files");
                     foreach (var fileToBackup in filesToBackup)
                     {
                         var absolutePath = Path.Combine(JenkinsHome, fileToBackup);
                         var entry = zipFile.CreateEntry(fileToBackup);
-                        await addFileToEntry(entry, absolutePath);
+                        await addFileToZipArchive(entry, absolutePath);
                     }
 
-                    var jobsEntry = zipFile.CreateEntry("jobs.zip");
-                    await addFileToEntry(jobsEntry, outputJobsZipFile);
-                    var usersEntry = zipFile.CreateEntry("users.zip");
-                    await addFileToEntry(usersEntry, outputUsersZipFile);
+                    Logger.Normal("Zipping users");
+                    var jenkinsUsersDirectory = Path.Combine(JenkinsHome, "users");
+                    var userFiles = GlobFiles(jenkinsUsersDirectory, "**/*");
+                    foreach (var userFile in userFiles)
+                    {
+                        var entryPath = $"users/{userFile.Substring(jenkinsUsersDirectory.Length + 1)}";
+                        var entry = zipFile.CreateEntry(entryPath);
+                        await addFileToZipArchive(entry, userFile);
+                    }
+
+                    var jenkinsJobsDirectory = Path.Combine(JenkinsHome, "jobs");
+                    var jobs = GlobDirectories(jenkinsJobsDirectory, "*");
+                    foreach (var job in jobs)
+                    {
+                        var jobName = Path.GetFileName(job);
+                        if (jobName == Jenkins.Instance?.JobBaseName)
+                        {
+                            Logger.Normal($"Skipping current job {jobName} to circumvent file lock of current running job");
+                            continue;
+                        }
+
+                        Logger.Normal($"Zipping job {jobName}");
+                        var jobFiles = GlobFiles(job, "**/*");
+                        foreach (var jobFile in jobFiles)
+                        {
+                            var entryPath = $"jobs/{jobName}/{jobFile.Substring(job.Length + 1)}";
+                            var entry = zipFile.CreateEntry(entryPath);
+                            await addFileToZipArchive(entry, jobFile);
+                        }
+                    }
 
                     backupSizeInBytes = fs.Length;
                 }
