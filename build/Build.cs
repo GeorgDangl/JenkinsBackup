@@ -195,6 +195,7 @@ class Build : NukeBuild
                 FileSizeInBytes = backupSizeInBytes
             };
 
+            Logger.Normal($"Uploading backup, total size: {ConvertLongToReadableFileSize(backupSizeInBytes)}");
             using (var fs = File.OpenRead(outputArchive))
             {
                 await UploadFileAsync(fs, metadata.ToBlobStorageFilename());
