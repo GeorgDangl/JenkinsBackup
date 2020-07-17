@@ -132,12 +132,19 @@ class Build : NukeBuild
 
             Func<ZipArchiveEntry, string, Task> addFileToZipArchive = async (entry, absolutePath) =>
             {
-                using (var entryStream = entry.Open())
+                try
                 {
-                    using (var entryFs = File.OpenRead(absolutePath))
+                    using (var entryStream = entry.Open())
                     {
-                        await entryFs.CopyToAsync(entryStream);
+                        using (var entryFs = File.OpenRead(absolutePath))
+                        {
+                            await entryFs.CopyToAsync(entryStream);
+                        }
                     }
+                }
+                catch
+                {
+                    Logger.Warn($"Failed to open file {absolutePath} to backup archive, the file might be locked.");
                 }
             };
 
@@ -171,12 +178,6 @@ class Build : NukeBuild
                     foreach (var job in jobs)
                     {
                         var jobName = Path.GetFileName(job);
-                        if (jobName == currentJenkinsJobName)
-                        {
-                            Logger.Normal($"Skipping current job {jobName} to circumvent file lock of current running job");
-                            continue;
-                        }
-
                         Logger.Normal($"Zipping job {jobName}");
                         var jobFiles = GlobFiles(job, "**/*");
                         foreach (var jobFile in jobFiles)
