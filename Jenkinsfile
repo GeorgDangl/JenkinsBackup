@@ -5,7 +5,6 @@ pipeline {
     agent {
         node {
             label 'master'
-            customWorkspace 'workspace/JenkinsBackup'
         }
     }
     environment {
